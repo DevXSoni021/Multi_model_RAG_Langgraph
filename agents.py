@@ -320,9 +320,11 @@ class MultiAgentRAG:
         self.vector_store = vector_store
         
         # Determine which LLM to use as primary
+        # ALWAYS use local Hugging Face models (no API key needed for local models)
         if use_huggingface_primary is None:
-            # Auto-detect: use Hugging Face if API key is available
-            use_huggingface_primary = bool(config.HUGGINGFACE_API_KEY)
+            # Default to True - we use local models, not API
+            use_huggingface_primary = True
+            print("ℹ️ Using local Hugging Face models (no API key required)")
         
         # Initialize primary LLM (Hugging Face) - use LOCAL models instead of API
         if use_huggingface_primary:
