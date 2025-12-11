@@ -150,19 +150,8 @@ def create_retriever_tools(vector_store: MultimodalVectorStore):
                     "note": f"Image found via semantic search (similarity: {1 - img_result.get('distance', 0):.2f})"
                 }
                 
-                # Use Hugging Face to describe image if available
-                if hf_multimodal and hf_multimodal.is_available() and img_result.get("image_base64"):
-                    try:
-                        image_description = hf_multimodal.describe_image(
-                            img_result.get("image_base64"), 
-                            f"Describe this image in detail. User is asking: {query}"
-                        )
-                        if image_description:
-                            result["image_description"] = image_description
-                            result["content"] = f"Image from page {img_result.get('page_number', 'unknown')}: {image_description}"
-                            result["note"] += " (Description via Hugging Face)"
-                    except Exception as e:
-                        print(f"Warning: Could not describe image with Hugging Face: {e}")
+                # API-based image description disabled - using CLIP embeddings instead
+                # Images are already semantically searchable via CLIP embeddings in vector_store
                 
                 results.append(result)
         
@@ -441,8 +430,6 @@ class MultiAgentRAG:
             # Don't use API-based Hugging Face as fallback - we use local models
             # If local model fails, we'll handle it in error handling
             self.fallback_llm = None
-            else:
-                self.fallback_llm = None
         
         # Create tools
         self.retriever_tools = create_retriever_tools(vector_store)
