@@ -1,0 +1,40 @@
+# Core LangChain and LangGraph
+langchain>=0.1.0
+langchain-openai>=0.0.2
+langchain-community>=0.0.10
+langgraph>=0.0.20
+langsmith>=0.0.77
+
+# PDF Processing
+unstructured==0.11.6
+unstructured[pdf]==0.11.6
+pypdf==3.17.4
+pdf2image==1.16.3
+Pillow==10.1.0
+
+# Vector Store
+chromadb==0.4.18
+faiss-cpu==1.7.4
+
+# Multimodal LLM
+openai==1.6.1
+
+# Web Search
+duckduckgo-search==4.1.1
+tavily-python==0.3.0
+
+# Utilities
+python-dotenv==1.0.0
+streamlit==1.29.0
+pydantic>=2.7.4,<3.0.0
+numpy==1.24.3
+
+# Image Processing
+opencv-python==4.8.1.78
+sentence-transformers==2.2.2
+torch==2.0.1
+torchvision==0.15.2
+
+# Hugging Face API
+requests==2.31.0
+

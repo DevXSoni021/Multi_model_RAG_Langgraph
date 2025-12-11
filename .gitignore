@@ -1,0 +1,61 @@
+# Environment variables
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# Vector store
+vector_store/
+*.db
+*.sqlite
+
+# Temporary files
+*.tmp
+*.log
+temp/
+tmp/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# PDFs (optional - uncomment if you don't want to track PDFs)
+# *.pdf
+
+# Images (optional - uncomment if you don't want to track images)
+# *.jpg
+# *.png
+# *.jpeg
+
