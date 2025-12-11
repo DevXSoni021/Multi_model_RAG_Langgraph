@@ -318,17 +318,40 @@ class MultiAgentRAG:
             # Auto-detect: use Hugging Face if API key is available
             use_huggingface_primary = bool(config.HUGGINGFACE_API_KEY)
         
-        # Initialize primary LLM (Hugging Face) and fallback (OpenAI)
-        if use_huggingface_primary and config.HUGGINGFACE_API_KEY:
-            print("Using Hugging Face as primary LLM")
+        # Initialize primary LLM (Hugging Face) - use LOCAL models instead of API
+        if use_huggingface_primary:
+            print("Using Hugging Face as primary LLM (local model)")
             try:
-                self.llm = HuggingFaceLangChainLLM(
-                    api_key=config.HUGGINGFACE_API_KEY,
-                    model=config.HUGGINGFACE_LLM_MODEL
+                # Use local Hugging Face model via transformers (no API needed)
+                from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
+                from langchain_community.llms import HuggingFacePipeline
+                import torch
+                
+                model_name = config.HUGGINGFACE_LLM_MODEL
+                print(f"Loading local Hugging Face model: {model_name}")
+                
+                device = "cuda" if torch.cuda.is_available() else "cpu"
+                print(f"Using device: {device}")
+                
+                # Load model and tokenizer
+                tokenizer = AutoTokenizer.from_pretrained(model_name)
+                model = AutoModelForCausalLM.from_pretrained(model_name)
+                
+                # Create pipeline
+                pipe = pipeline(
+                    "text-generation",
+                    model=model,
+                    tokenizer=tokenizer,
+                    max_new_tokens=500,
+                    device=0 if device == "cuda" else -1,
+                    temperature=config.TEMPERATURE,
                 )
+                
+                # Wrap in LangChain compatible interface
+                self.llm = HuggingFacePipeline(pipeline=pipe)
                 self.primary_llm_type = "huggingface"
+                
                 # Keep OpenAI as fallback (lazy initialization - only create when needed)
-                # Don't initialize OpenAI during __init__ to avoid quota errors
                 self._openai_api_key = config.OPENAI_API_KEY
                 self._openai_config = {
                     "model": config.LLM_MODEL,
@@ -337,9 +360,32 @@ class MultiAgentRAG:
                     "request_timeout": 60
                 }
                 self.fallback_llm = None  # Will be created lazily if needed
-                print("✓ Hugging Face primary LLM initialized (OpenAI fallback available if needed)")
+                print("✓ Hugging Face primary LLM initialized (local model, no API needed)")
             except Exception as e:
-                print(f"Warning: Failed to initialize Hugging Face LLM: {e}")
+                print(f"Warning: Failed to initialize local Hugging Face LLM: {e}")
+                print("Falling back to API-based Hugging Face...")
+                # Fallback to API if local model fails
+                if config.HUGGINGFACE_API_KEY:
+                    try:
+                        self.llm = HuggingFaceLangChainLLM(
+                            api_key=config.HUGGINGFACE_API_KEY,
+                            model=config.HUGGINGFACE_LLM_MODEL
+                        )
+                        self.primary_llm_type = "huggingface"
+                        self._openai_api_key = config.OPENAI_API_KEY
+                        self._openai_config = {
+                            "model": config.LLM_MODEL,
+                            "temperature": config.TEMPERATURE,
+                            "max_retries": config.MAX_RETRIES,
+                            "request_timeout": 60
+                        }
+                        self.fallback_llm = None
+                        print("✓ Hugging Face primary LLM initialized (API-based fallback)")
+                    except Exception as api_error:
+                        print(f"Warning: API-based Hugging Face also failed: {api_error}")
+                        raise ValueError(f"Both local and API-based Hugging Face failed: {e}, {api_error}")
+                else:
+                    raise ValueError(f"Local Hugging Face model failed and no API key available: {e}")
                 # Try OpenAI as fallback, but handle quota errors gracefully
                 if config.OPENAI_API_KEY:
                     try:

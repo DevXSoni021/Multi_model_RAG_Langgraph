@@ -26,7 +26,8 @@ EMBEDDING_MODEL = "text-embedding-3-large"
 # - "microsoft/DialoGPT-medium" (good for conversations)
 # - "meta-llama/Llama-2-7b-chat-hf" (requires access, better quality)
 # - "mistralai/Mistral-7B-Instruct-v0.2" (requires access, high quality)
-HUGGINGFACE_LLM_MODEL = os.getenv("HUGGINGFACE_LLM_MODEL", "microsoft/DialoGPT-medium")
+# Use a smaller, faster model for local inference (no API needed)
+HUGGINGFACE_LLM_MODEL = os.getenv("HUGGINGFACE_LLM_MODEL", "distilgpt2")  # Changed to distilgpt2 for faster local loading
 
 # Best models for image understanding:
 # - "Salesforce/blip-image-captioning-base" (fast, good for descriptions)
