@@ -76,8 +76,9 @@ def create_retriever_tools(vector_store: MultimodalVectorStore):
         """
         import config
         
-        # Initialize Hugging Face fallback if available
-        hf_multimodal = HuggingFaceMultimodal() if config.HUGGINGFACE_API_KEY else None
+        # Don't use API-based Hugging Face for image understanding
+        # Images will be handled by the local CLIP model in vector_store
+        hf_multimodal = None  # Disabled API-based image understanding
         
         # Perform multimodal search (text + images)
         search_results = vector_store.multimodal_search(query, k=config.MAX_RETRIEVAL_DOCS, include_images=True)
@@ -113,10 +114,15 @@ def create_retriever_tools(vector_store: MultimodalVectorStore):
                     result["image_base64"] = images[0]
                     result["note"] = f"{len(images)} image(s) available (page {doc.metadata.get('page_number', 'unknown')})"
                     
-                    # Use Hugging Face to describe image if available
-                    if hf_multimodal and hf_multimodal.is_available():
-                        try:
-                            image_description = hf_multimodal.describe_image(images[0], f"Describe this image. User query: {query}")
+                    # Note: Image descriptions are handled by CLIP embeddings in vector_store
+                    # We don't use API-based image understanding to avoid API errors
+                    # Images are already semantically searchable via CLIP embeddings
+                    if False:  # Disabled API-based image description
+                        pass
+                    # Original code (disabled):
+                    # if hf_multimodal and hf_multimodal.is_available():
+                    #     try:
+                    #         image_description = hf_multimodal.describe_image(images[0], f"Describe this image. User query: {query}")
                             if image_description:
                                 result["image_description"] = image_description
                                 result["note"] += " (Description generated via Hugging Face)"
@@ -362,30 +368,18 @@ class MultiAgentRAG:
                 self.fallback_llm = None  # Will be created lazily if needed
                 print("✓ Hugging Face primary LLM initialized (local model, no API needed)")
             except Exception as e:
-                print(f"Warning: Failed to initialize local Hugging Face LLM: {e}")
-                print("Falling back to API-based Hugging Face...")
-                # Fallback to API if local model fails
-                if config.HUGGINGFACE_API_KEY:
-                    try:
-                        self.llm = HuggingFaceLangChainLLM(
-                            api_key=config.HUGGINGFACE_API_KEY,
-                            model=config.HUGGINGFACE_LLM_MODEL
-                        )
-                        self.primary_llm_type = "huggingface"
-                        self._openai_api_key = config.OPENAI_API_KEY
-                        self._openai_config = {
-                            "model": config.LLM_MODEL,
-                            "temperature": config.TEMPERATURE,
-                            "max_retries": config.MAX_RETRIES,
-                            "request_timeout": 60
-                        }
-                        self.fallback_llm = None
-                        print("✓ Hugging Face primary LLM initialized (API-based fallback)")
-                    except Exception as api_error:
-                        print(f"Warning: API-based Hugging Face also failed: {api_error}")
-                        raise ValueError(f"Both local and API-based Hugging Face failed: {e}, {api_error}")
-                else:
-                    raise ValueError(f"Local Hugging Face model failed and no API key available: {e}")
+                print(f"❌ Error: Failed to initialize local Hugging Face LLM: {e}")
+                import traceback
+                traceback.print_exc()
+                # Don't fall back to API - local models are more reliable
+                # Instead, provide helpful error message
+                error_msg = f"Failed to load local Hugging Face model '{model_name}'. "
+                error_msg += "This might be due to:\n"
+                error_msg += "1. Insufficient memory (try a smaller model like 'gpt2')\n"
+                error_msg += "2. Network issues downloading the model\n"
+                error_msg += "3. Missing dependencies (ensure transformers and torch are installed)\n\n"
+                error_msg += f"Full error: {str(e)}"
+                raise ValueError(error_msg)
                 # Try OpenAI as fallback, but handle quota errors gracefully
                 if config.OPENAI_API_KEY:
                     try:
@@ -742,7 +736,10 @@ class MultiAgentRAG:
                     
                     # Return Hugging Face error without trying OpenAI fallback
                     print(f"⚠️ Hugging Face error: {str(e)[:200]}")
-                    return f"Hugging Face API error: {str(e)[:200]}. Please check your Hugging Face API key or try again later. OpenAI fallback is disabled to prevent quota errors."
+                    error_msg = f"Error with local Hugging Face model: {str(e)[:200]}. "
+                    error_msg += "This is a local model error (not an API error). "
+                    error_msg += "Please check that the model loaded correctly or try reinitializing the system."
+                    return error_msg
                 
                 # Handle rate limit/quota errors - ONLY if OpenAI is primary
                 # If Hugging Face is primary, these errors shouldn't happen (they indicate a bug)
