@@ -122,11 +122,21 @@ class MultimodalVectorStore:
         # Create vector store directory if it doesn't exist
         os.makedirs(config.VECTOR_STORE_PATH, exist_ok=True)
         
+        # Fix for Colab: Use absolute path and ensure write permissions
+        vector_store_path = os.path.abspath(config.VECTOR_STORE_PATH)
+        os.makedirs(vector_store_path, exist_ok=True)
+        # Ensure directory is writable
+        try:
+            os.chmod(vector_store_path, 0o755)
+        except:
+            pass  # Ignore permission errors if we can't change permissions
+        
         # Initialize ChromaDB client first (consistent approach)
         try:
             # Use PersistentClient for both text and image collections
+            # Use absolute path to avoid readonly issues
             self.chroma_client = chromadb.PersistentClient(
-                path=config.VECTOR_STORE_PATH
+                path=vector_store_path
             )
             
             # Initialize ChromaDB for text using the client
@@ -156,7 +166,7 @@ class MultimodalVectorStore:
                 self.vector_store = Chroma(
                     collection_name=self.collection_name,
                     embedding_function=self.embeddings,
-                    persist_directory=config.VECTOR_STORE_PATH,
+                    persist_directory=vector_store_path,
                 )
                 print("✓ Initialized text collection with fallback method")
         except Exception as e:
@@ -165,7 +175,7 @@ class MultimodalVectorStore:
             self.vector_store = Chroma(
                 collection_name=self.collection_name,
                 embedding_function=self.embeddings,
-                persist_directory=config.VECTOR_STORE_PATH,
+                persist_directory=vector_store_path,
             )
             self.chroma_client = None
             print("✓ Initialized text collection with fallback method (no explicit client)")
@@ -174,7 +184,7 @@ class MultimodalVectorStore:
         if self.image_embedder.is_available():
             try:
                 if self.chroma_client is None:
-                    self.chroma_client = chromadb.PersistentClient(path=config.VECTOR_STORE_PATH)
+                    self.chroma_client = chromadb.PersistentClient(path=vector_store_path)
                 
                 image_collection_name = f"{self.collection_name}_images"
                 self.image_collection = self.chroma_client.get_or_create_collection(
