@@ -741,10 +741,20 @@ class MultiAgentRAG:
                         return f"Error: The system tried to use OpenAI even though Hugging Face is primary. This is a bug. Error details: {str(e)[:300]}. Please check that all components are using Hugging Face."
                     
                     # Return Hugging Face error without trying OpenAI fallback
+                    error_str_lower = str(e).lower()
+                    
+                    # Check if this is an API error (shouldn't happen with local models)
+                    if "api" in error_str_lower or "endpoint" in error_str_lower or "hugging face api" in error_str_lower:
+                        print(f"⚠️ ERROR: API error detected when using local Hugging Face model!")
+                        print(f"This indicates the system is incorrectly trying to use the API.")
+                        print(f"Full error: {str(e)}")
+                        return f"ERROR: The system tried to use Hugging Face API even though local models are configured. This is a bug. Please re-run Step 6 to reinitialize the system with local models. Error: {str(e)[:300]}"
+                    
+                    # This is a local model error
                     print(f"⚠️ Hugging Face error: {str(e)[:200]}")
                     error_msg = f"Error with local Hugging Face model: {str(e)[:200]}. "
                     error_msg += "This is a local model error (not an API error). "
-                    error_msg += "Please check that the model loaded correctly or try reinitializing the system."
+                    error_msg += "Please check that the model loaded correctly or try reinitializing the system (re-run Step 6)."
                     return error_msg
                 
                 # Handle rate limit/quota errors - ONLY if OpenAI is primary
