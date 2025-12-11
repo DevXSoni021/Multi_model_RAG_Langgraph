@@ -260,24 +260,58 @@ class MultimodalVectorStore:
                     # Create and store image embeddings for semantic search
                     if self.image_collection and self.image_embedder.is_available():
                         for img_idx, img_base64 in enumerate(images):
-                            image_embedding = self.image_embedder.embed_image(img_base64)
-                            if image_embedding:
-                                image_id = f"{chunk_id}_img_{img_idx}"
-                                # Store image embedding with reference to chunk
-                                self.image_collection.add(
-                                    ids=[image_id],
-                                    embeddings=[image_embedding],
-                                    metadatas=[{
-                                        "chunk_id": chunk_id,
-                                        "image_index": str(img_idx),
-                                        "page_number": str(metadata_dict.get("page_number", "")),
-                                        "has_text": "true" if doc_text else "false"
-                                    }]
-                                )
+                            try:
+                                image_embedding = self.image_embedder.embed_image(img_base64)
+                                if image_embedding is not None:
+                                    # Convert numpy array to list if needed
+                                    if hasattr(image_embedding, 'tolist'):
+                                        embedding_list = image_embedding.tolist()
+                                    elif isinstance(image_embedding, list):
+                                        embedding_list = image_embedding
+                                    else:
+                                        embedding_list = list(image_embedding)
+                                    
+                                    image_id = f"{chunk_id}_img_{img_idx}"
+                                    # Store image embedding with reference to chunk
+                                    self.image_collection.add(
+                                        ids=[image_id],
+                                        embeddings=[embedding_list],
+                                        metadatas=[{
+                                            "chunk_id": str(chunk_id),
+                                            "image_index": str(img_idx),
+                                            "page_number": str(metadata_dict.get("page_number", "")),
+                                            "has_text": "true" if doc_text else "false"
+                                        }]
+                                    )
+                            except Exception as e:
+                                print(f"Warning: Could not create embedding for image {img_idx} in chunk {chunk_id}: {e}")
+                                continue
         
         # Add to vector store
-        self.vector_store.add_documents(documents, ids=ids)
-        self.vector_store.persist()
+        if not documents:
+            print("Warning: No documents to add to vector store (all chunks may have been empty)")
+            return
+        
+        try:
+            # Ensure all IDs are strings
+            ids = [str(id) for id in ids if id is not None]
+            
+            # Check that documents and ids have the same length
+            if len(documents) != len(ids):
+                print(f"Warning: Mismatch between documents ({len(documents)}) and ids ({len(ids)}). Adjusting...")
+                # Use only the matching length
+                min_len = min(len(documents), len(ids))
+                documents = documents[:min_len]
+                ids = ids[:min_len]
+            
+            self.vector_store.add_documents(documents, ids=ids)
+            self.vector_store.persist()
+            print(f"✓ Added {len(documents)} text chunks to vector store")
+        except Exception as e:
+            print(f"Error adding documents to vector store: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
         
         # Persist image collection if available
         if self.image_collection:
