@@ -416,33 +416,39 @@ class MultiAgentRAG:
             except Exception as e:
                 error_str = str(e).lower()
                 if "quota" in error_str or "429" in error_str:
-                    # If OpenAI quota exceeded, try Hugging Face as primary instead
-                    print("OpenAI quota exceeded, switching to Hugging Face as primary...")
-                    if config.HUGGINGFACE_API_KEY:
-                        try:
-                            self.llm = HuggingFaceLangChainLLM(
-                                api_key=config.HUGGINGFACE_API_KEY,
-                                model=config.HUGGINGFACE_LLM_MODEL
-                            )
-                            self.primary_llm_type = "huggingface"
-                            self.fallback_llm = None
-                            print("✓ Using Hugging Face as primary (OpenAI quota exceeded)")
-                        except Exception as hf_error:
-                            raise ValueError(f"OpenAI quota exceeded and Hugging Face initialization failed: {hf_error}")
-                    else:
-                        raise ValueError("OpenAI quota exceeded and no Hugging Face API key available")
+                    # If OpenAI quota exceeded, try local Hugging Face model instead
+                    print("OpenAI quota exceeded, switching to local Hugging Face model...")
+                    try:
+                        # Use local Hugging Face model (same as primary initialization)
+                        from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
+                        from langchain_community.llms import HuggingFacePipeline
+                        import torch
+                        
+                        model_name = config.HUGGINGFACE_LLM_MODEL
+                        device = "cuda" if torch.cuda.is_available() else "cpu"
+                        
+                        tokenizer = AutoTokenizer.from_pretrained(model_name)
+                        model = AutoModelForCausalLM.from_pretrained(model_name)
+                        pipe = pipeline(
+                            "text-generation",
+                            model=model,
+                            tokenizer=tokenizer,
+                            max_new_tokens=500,
+                            device=0 if device == "cuda" else -1,
+                            temperature=config.TEMPERATURE,
+                        )
+                        self.llm = HuggingFacePipeline(pipeline=pipe)
+                        self.primary_llm_type = "huggingface"
+                        self.fallback_llm = None
+                        print("✓ Using local Hugging Face model (OpenAI quota exceeded)")
+                    except Exception as hf_error:
+                        raise ValueError(f"OpenAI quota exceeded and local Hugging Face model initialization failed: {hf_error}")
                 else:
                     raise e
             
-            # Keep Hugging Face as fallback
-            if config.HUGGINGFACE_API_KEY:
-                try:
-                    self.fallback_llm = HuggingFaceLangChainLLM(
-                        api_key=config.HUGGINGFACE_API_KEY,
-                        model=config.HUGGINGFACE_LLM_MODEL
-                    )
-                except:
-                    self.fallback_llm = None
+            # Don't use API-based Hugging Face as fallback - we use local models
+            # If local model fails, we'll handle it in error handling
+            self.fallback_llm = None
             else:
                 self.fallback_llm = None
         
@@ -773,18 +779,11 @@ class MultiAgentRAG:
                         except:
                             pass
                     
-                    # Try Hugging Face fallback on first rate limit/quota error (if OpenAI is primary)
+                    # Don't use API-based Hugging Face fallback - we use local models
+                    # This code path should only be used if OpenAI is primary
                     if attempt == 0 and self.primary_llm_type == "openai":
-                        # Lazy initialization of Hugging Face fallback
-                        if self.fallback_llm is None and config.HUGGINGFACE_API_KEY:
-                            try:
-                                self.fallback_llm = HuggingFaceLangChainLLM(
-                                    api_key=config.HUGGINGFACE_API_KEY,
-                                    model=config.HUGGINGFACE_LLM_MODEL
-                                )
-                            except Exception as hf_init_error:
-                                print(f"⚠️ Could not initialize Hugging Face fallback: {hf_init_error}")
-                                self.fallback_llm = None
+                        # Skip API-based fallback - not needed when using local models
+                        pass
                         
                         if self.fallback_llm:
                             try:
@@ -853,13 +852,11 @@ class MultiAgentRAG:
                                     ])
                                     return response.content if hasattr(response, "content") else str(response)
                                 except Exception as llm_error:
-                                    # Fallback to Hugging Face if OpenAI fails
-                                    if config.HUGGINGFACE_API_KEY and ("rate limit" in str(llm_error).lower() or "429" in str(llm_error)):
-                                        hf_llm = HuggingFaceLLM()
-                                        if hf_llm.is_available():
-                                            hf_response = hf_llm.generate(f"Based on this context: {context}\n\nAnswer this question: {question}")
-                                            if hf_response:
-                                                return f"[Using Hugging Face fallback]\n\n{hf_response}"
+                                    # Don't use API-based Hugging Face fallback - we're already using local models
+                                    # If this is called, it means the local model failed, so just return the error
+                                    error_msg = f"Error with local Hugging Face model: {str(llm_error)[:200]}"
+                                    print(f"⚠️ {error_msg}")
+                                    return error_msg
                     except:
                         pass
                 
