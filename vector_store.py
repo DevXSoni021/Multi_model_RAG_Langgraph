@@ -150,6 +150,7 @@ class MultimodalVectorStore:
                         collection_name=self.collection_name,
                         embedding_function=self.embeddings,
                         client=self.chroma_client,
+                        persist_directory=vector_store_path,  # Always include persist_directory
                     )
                     print(f"✓ Loaded existing text collection: {self.collection_name}")
                 else:
@@ -158,6 +159,7 @@ class MultimodalVectorStore:
                         collection_name=self.collection_name,
                         embedding_function=self.embeddings,
                         client=self.chroma_client,
+                        persist_directory=vector_store_path,  # Always include persist_directory
                     )
                     print(f"✓ Created new text collection: {self.collection_name}")
             except Exception as e:
@@ -315,7 +317,25 @@ class MultimodalVectorStore:
                 ids = ids[:min_len]
             
             self.vector_store.add_documents(documents, ids=ids)
-            self.vector_store.persist()
+            # Only persist if persist_directory is set (ChromaDB with client may not need explicit persist)
+            try:
+                if hasattr(self.vector_store, '_persist_directory') and self.vector_store._persist_directory:
+                    self.vector_store.persist()
+                elif hasattr(self.vector_store, 'persist_directory') and self.vector_store.persist_directory:
+                    self.vector_store.persist()
+                # If using PersistentClient, ChromaDB persists automatically, but persist() is safe to call
+                elif self.chroma_client is not None:
+                    # With PersistentClient, data is already persisted, but try persist() anyway
+                    try:
+                        self.vector_store.persist()
+                    except ValueError:
+                        # If persist() fails, it's okay - PersistentClient already persists
+                        pass
+            except (ValueError, AttributeError) as persist_error:
+                # If persist fails, it's not critical - PersistentClient already persists automatically
+                if "persist_directory" not in str(persist_error).lower():
+                    # Only ignore persist_directory errors, raise others
+                    raise
             print(f"✓ Added {len(documents)} text chunks to vector store")
         except Exception as e:
             print(f"Error adding documents to vector store: {e}")
