@@ -117,17 +117,7 @@ def create_retriever_tools(vector_store: MultimodalVectorStore):
                     # Note: Image descriptions are handled by CLIP embeddings in vector_store
                     # We don't use API-based image understanding to avoid API errors
                     # Images are already semantically searchable via CLIP embeddings
-                    if False:  # Disabled API-based image description
-                        pass
-                    # Original code (disabled):
-                    # if hf_multimodal and hf_multimodal.is_available():
-                    #     try:
-                    #         image_description = hf_multimodal.describe_image(images[0], f"Describe this image. User query: {query}")
-                            if image_description:
-                                result["image_description"] = image_description
-                                result["note"] += " (Description generated via Hugging Face)"
-                        except Exception as e:
-                            print(f"Warning: Could not describe image with Hugging Face: {e}")
+                    # Original API-based code removed to prevent API errors
                 else:
                     result["note"] = f"Image available but data not found (page {doc.metadata.get('page_number', 'unknown')})"
             else:
