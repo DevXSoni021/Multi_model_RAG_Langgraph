@@ -3,8 +3,8 @@ import functools
 import os
 from typing import Annotated, Literal, TypedDict
 from langchain_openai import ChatOpenAI
-from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain.tools import Tool
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.tools import Tool
 # Try to import agent creation functions
 create_openai_functions_agent = None
 AgentExecutor = None
