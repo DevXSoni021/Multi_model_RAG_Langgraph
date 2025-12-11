@@ -122,25 +122,70 @@ class MultimodalVectorStore:
         # Create vector store directory if it doesn't exist
         os.makedirs(config.VECTOR_STORE_PATH, exist_ok=True)
         
-        # Initialize ChromaDB for text
-        self.vector_store = Chroma(
-            collection_name=self.collection_name,
-            embedding_function=self.embeddings,
-            persist_directory=config.VECTOR_STORE_PATH,
-        )
+        # Initialize ChromaDB client first (consistent approach)
+        try:
+            # Use PersistentClient for both text and image collections
+            self.chroma_client = chromadb.PersistentClient(
+                path=config.VECTOR_STORE_PATH
+            )
+            
+            # Initialize ChromaDB for text using the client
+            # Try to get existing collection first, create if doesn't exist
+            try:
+                # Check if collection exists
+                existing_collections = [col.name for col in self.chroma_client.list_collections()]
+                if self.collection_name in existing_collections:
+                    # Collection exists, use it
+                    self.vector_store = Chroma(
+                        collection_name=self.collection_name,
+                        embedding_function=self.embeddings,
+                        client=self.chroma_client,
+                    )
+                    print(f"✓ Loaded existing text collection: {self.collection_name}")
+                else:
+                    # Create new collection
+                    self.vector_store = Chroma(
+                        collection_name=self.collection_name,
+                        embedding_function=self.embeddings,
+                        client=self.chroma_client,
+                    )
+                    print(f"✓ Created new text collection: {self.collection_name}")
+            except Exception as e:
+                print(f"Warning: Error initializing text collection: {e}")
+                # Fallback: try without explicit client
+                self.vector_store = Chroma(
+                    collection_name=self.collection_name,
+                    embedding_function=self.embeddings,
+                    persist_directory=config.VECTOR_STORE_PATH,
+                )
+                print("✓ Initialized text collection with fallback method")
+        except Exception as e:
+            print(f"Warning: Error creating ChromaDB client: {e}")
+            # Fallback: use default Chroma initialization
+            self.vector_store = Chroma(
+                collection_name=self.collection_name,
+                embedding_function=self.embeddings,
+                persist_directory=config.VECTOR_STORE_PATH,
+            )
+            self.chroma_client = None
+            print("✓ Initialized text collection with fallback method (no explicit client)")
         
         # Initialize separate ChromaDB collection for image embeddings
         if self.image_embedder.is_available():
             try:
-                import chromadb
-                self.image_client = chromadb.PersistentClient(path=config.VECTOR_STORE_PATH)
-                self.image_collection = self.image_client.get_or_create_collection(
-                    name=f"{self.collection_name}_images",
+                if self.chroma_client is None:
+                    self.chroma_client = chromadb.PersistentClient(path=config.VECTOR_STORE_PATH)
+                
+                image_collection_name = f"{self.collection_name}_images"
+                self.image_collection = self.chroma_client.get_or_create_collection(
+                    name=image_collection_name,
                     metadata={"description": "Image embeddings for semantic search"}
                 )
                 print("✓ Image embedding collection initialized")
             except Exception as e:
                 print(f"Warning: Could not initialize image collection: {e}")
+                import traceback
+                traceback.print_exc()
                 self.image_collection = None
         else:
             self.image_collection = None
